@@ -1,5 +1,8 @@
 import { addDays, daysBetween, type ScheduleItem } from './schedule';
 
+/** Doses landing within this window from today are flagged `due_soon`. */
+export const DEFAULT_DUE_SOON_WINDOW_DAYS = 14;
+
 export type DoseStatus =
   | 'completed'
   | 'due_today'
@@ -87,9 +90,9 @@ export function isActionable(status: DoseStatus): boolean {
 
 function applicableItems(schedule: ScheduleItem[], sex: 'M' | 'F'): ScheduleItem[] {
   return schedule
-    .filter((i) => i.isActive)
-    .filter((i) => !i.femaleOnly || sex === 'F')
-    .sort((a, b) => a.targetAgeDays - b.targetAgeDays || a.doseOrder - b.doseOrder);
+    .filter((i) => i.is_active)
+    .filter((i) => i.applies_to === 'any' || (i.applies_to === 'female' ? sex === 'F' : sex === 'M'))
+    .sort((a, b) => a.target_age_days - b.target_age_days || a.dose_order - b.dose_order);
 }
 
 /**
@@ -109,23 +112,21 @@ export function computeImmunizationTimeline(input: TimelineInput): TimelineEntry
       .sort((a, b) => (a.administeredOn < b.administeredOn ? 1 : -1))[0];
 
   const previousInSeries = (code: string, order: number): RecordedDose | undefined => {
-    const prior = doses
-      .filter((d) => d.vaccineCode === code && d.doseOrder !== undefined)
-      .filter((d) => (d.doseOrder as number) < order);
-    if (prior.length > 0) {
-      return prior.sort((a, b) => ((a.doseOrder as number) < (b.doseOrder as number) ? 1 : -1))[0];
-    }
-    const items = input.schedule.filter((i) => i.vaccineCode === code && i.doseOrder < order);
-    const prevItem = items.sort((a, b) => b.doseOrder - a.doseOrder)[0];
-    return prevItem ? administered(code, prevItem.doseLabel) : undefined;
+    const items = input.schedule.filter(
+      (i) => i.vaccine_code === code && i.dose_order < order,
+    );
+    const prevItem = items.sort((a, b) => b.dose_order - a.dose_order)[0];
+    return prevItem ? administered(code, prevItem.dose_label) : undefined;
   };
 
   return applicableItems(input.schedule, input.sex).map((item) => {
-    const given = administered(item.vaccineCode, item.doseLabel);
-    let dueOn = addDays(dob, item.targetAgeDays);
-    const prev = item.doseOrder > 1 ? previousInSeries(item.vaccineCode, item.doseOrder) : undefined;
-    if (item.minIntervalDays && prev?.administeredOn) {
-      const intervalDue = addDays(prev.administeredOn, item.minIntervalDays);
+    const given = administered(item.vaccine_code, item.dose_label);
+    const scheduledDueOn = addDays(dob, item.target_age_days);
+    let dueOn = scheduledDueOn;
+    const prev =
+      item.dose_order > 1 ? previousInSeries(item.vaccine_code, item.dose_order) : undefined;
+    if (item.min_interval_days && prev?.administeredOn) {
+      const intervalDue = addDays(prev.administeredOn, item.min_interval_days);
       if (intervalDue > dueOn) dueOn = intervalDue;
     }
 
@@ -136,18 +137,19 @@ export function computeImmunizationTimeline(input: TimelineInput): TimelineEntry
     else if (diff === 0) status = 'due_today';
     else status = 'overdue';
 
-    const needsReview = !given && status === 'overdue' && item.requiresReview;
+    const needsReview = !given && status === 'overdue' && item.requires_review;
     return {
-      key: `${item.vaccineCode}:${item.doseLabel}`,
+      key: `${item.vaccine_code}:${item.dose_label}`,
       item,
       status,
       dueOn,
+      scheduledDueOn,
       administeredOn: given?.administeredOn ?? null,
       daysOverdue: status === 'overdue' ? Math.abs(diff) : 0,
       daysUntilDue: status === 'upcoming' || status === 'due_soon' ? diff : 0,
       requiresReview: needsReview,
       reviewNote: needsReview
-        ? item.catchUpNote ??
+        ? item.catch_up_note ??
           'Catch-up timing needs healthcare-worker review; no unsupported recommendation is given.'
         : null,
     };
