@@ -96,6 +96,27 @@ export function ageInDays(dateOfBirth: string, on: string): number {
   return daysBetween(dateOfBirth, on);
 }
 
+/** Convert an age code to days of life: 'B' = 0, 'W6' = 6 weeks, 'M5' = 5 months, 'Y9' = 9 years. A number means weeks. */
+export function days(code: string | number): number {
+  if (typeof code === 'number') return code * 7;
+  const m = /^([A-Z]+)(\d+)$/.exec(code.trim());
+  if (!m) return 0;
+  const unit = m[1];
+  const n = parseInt(m[2], 10);
+  switch (unit) {
+    case 'B':
+      return 0;
+    case 'W':
+      return n * 7;
+    case 'M':
+      return Math.round(n * 30.4375);
+    case 'Y':
+      return Math.round(n * 365.25);
+    default:
+      return n;
+  }
+}
+
 /** Human age string, e.g. `6 weeks`, `9 months`, `2 years 3 months`. */
 export function formatAge(totalDays: number): string {
   if (totalDays < 0) return 'not yet born';

@@ -25,21 +25,31 @@ function item(
   doseLabel: string,
   doseOrder: number,
   targetAgeDays: number,
-  opts: Partial<ScheduleItem> = {},
+  opts: {
+    dueWindowDays?: number;
+    minIntervalDays?: number | null;
+    catchUpNote?: string;
+    requiresReview?: boolean;
+    femaleOnly?: boolean;
+  } = {},
 ): ScheduleItem {
   return {
     id: `${vaccineCode}#${doseOrder}`,
-    vaccineCode,
-    vaccineName,
-    doseLabel,
-    doseOrder,
-    targetAgeDays,
-    dueWindowDays: opts.dueWindowDays ?? 14,
-    minIntervalDays: opts.minIntervalDays ?? null,
-    catchUpNote: opts.catchUpNote ?? null,
-    requiresReview: opts.requiresReview ?? false,
-    femaleOnly: opts.femaleOnly ?? false,
-    isActive: true,
+    schedule_version: SCHEDULE_VERSION,
+    vaccine_code: vaccineCode,
+    vaccine_name: vaccineName,
+    dose_label: doseLabel,
+    dose_order: doseOrder,
+    target_age_days: targetAgeDays,
+    due_window_days: opts.dueWindowDays ?? 14,
+    min_interval_days: opts.minIntervalDays ?? null,
+    applies_to: opts.femaleOnly ? 'female' : 'any',
+    catch_up_note: opts.catchUpNote ?? null,
+    requires_review: opts.requiresReview ?? false,
+    source_name: SCHEDULE_SOURCE,
+    source_url: SCHEDULE_URL,
+    effective_date: EFFECTIVE_DATE,
+    is_active: true,
   };
 }
 
