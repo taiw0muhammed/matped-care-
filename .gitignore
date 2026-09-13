@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+*.log
+.env
+.env.local
+.DS_Store
+coverage/
+next-env.d.ts
+tsconfig.tsbuildinfo
+/prisma/migrations/dev/
+
+# dev scratch
+.helix-overflow/
+fix_ts.py

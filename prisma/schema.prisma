@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  NURSE
+  PARENT
+  ADMIN
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+enum ChildStatus {
+  ACTIVE
+  INACTIVE
+  DECEASED
+  TRANSFERRED
+}
+
+enum VisitType {
+  ROUTINE
+  FOLLOW_UP
+  EMERGENCY
+  OTHER
+}
+
+enum GrowthStatus {
+  GREEN
+  YELLOW
+  RED
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  PUSH
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  role         Role     @default(PARENT)
+  phone        String?
+  active       Boolean  @default(true)
+  facilityName String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions            Session[]
+  guardianLinks       Guardian[]
+  nurseChildren       Child[]     @relation("NurseChildren")
+  appointments        Appointment[]
+  appointmentsAsNurse Appointment[] @relation("ApptNurses")
+  visitsAsNurse         Visit[]     @relation("VisitNurses")
+  notifications         Notification[] @relation("NotifUsers")
+  auditLogs             AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Child {
+  id          String      @id @default(cuid())
+  recordId    String      @unique
+  firstName   String
+  lastName    String
+  sex         Sex
+  dateOfBirth DateTime
+  birthWeight Float?
+  bloodGroup  String?
+  address     String?
+  status      ChildStatus @default(ACTIVE)
+  nurseId     String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  nurse             User?              @relation("NurseChildren", fields: [nurseId], references: [id], onDelete: SetNull)
+  guardians         Guardian[]
+  visits            Visit[]
+  growth            GrowthMeasurement[]
+  immunizations     Immunization[]
+  appointments      Appointment[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  shareTokens       ShareToken[]
+
+  @@index([nurseId])
+  @@map("children")
+}
+
+model Guardian {
+  id      String  @id @default(cuid())
+  childId String
+  userId  String
+  relation String?
+  createdAt DateTime @default(now())
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, userId])
+  @@index([userId])
+  @@map("guardians")
+}
+
+model ShareToken {
+  id        String   @id @default(cuid())
+  childId   String
+  token     String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@map("share_tokens")
+}
+
+model Visit {
+  id          String    @id @default(cuid())
+  childId     String
+  nurseId     String?
+  visitDate   DateTime
+  visitType   VisitType @default(ROUTINE)
+  notes       String?
+  diagnoses   String?
+  createdAt   DateTime  @default(now())
+
+  child   Child             @relation(fields: [childId], references: [id], onDelete: Cascade)
+  nurse   User?             @relation("VisitNurses", fields: [nurseId], references: [id], onDelete: SetNull)
+  growth  GrowthMeasurement[]
+  immunizations Immunization[]
+
+  @@index([childId, visitDate])
+  @@map("visits")
+}
+
+model GrowthMeasurement {
+  id           String        @id @default(cuid())
+  childId      String
+  visitId      String?
+  measuredAt   DateTime
+  weightKg     Float?
+  lengthCm     Float?
+  headCircCm   Float?
+  status       GrowthStatus?
+  notes        String?
+  nurseId      String?
+  createdAt    DateTime      @default(now())
+
+  child   Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  visit   Visit? @relation(fields: [visitId], references: [id], onDelete: SetNull)
+
+  @@index([childId, measuredAt])
+  @@map("growth_measurements")
+}
+
+model Immunization {
+  id         String      @id @default(cuid())
+  childId    String
+  visitId    String?
+  vaccine    String
+  dose       Int
+  scheduled  DateTime
+  givenAt    DateTime?
+  batchNo    String?
+  site       String?
+  status     String      @default("SCHEDULED")
+  deferred   Boolean     @default(false)
+  reason     String?
+  nurseId    String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  child Child  @relation(fields: [childId], references: [id], onDelete: Cascade)
+  visit Visit? @relation(fields: [visitId], references: [id], onDelete: SetNull)
+
+  @@index([childId, vaccine])
+  @@map("immunizations")
+}
+
+model Appointment {
+  id          String             @id @default(cuid())
+  childId     String
+  userId      String
+  nurseId     String?
+  scheduledAt DateTime
+  type        String?
+  status      AppointmentStatus  @default(SCHEDULED)
+  notes       String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  nurse User? @relation("ApptNurses", fields: [nurseId], references: [id], onDelete: SetNull)
+
+  @@index([childId])
+  @@index([nurseId, scheduledAt])
+  @@map("appointments")
+}
+
+model Notification {
+  id          String              @id @default(cuid())
+  childId     String?
+  userId      String?
+  channel     NotificationChannel
+  status      NotificationStatus  @default(QUEUED)
+  title       String
+  body        String
+  meta        Json?
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime            @default(now())
+
+  child Child? @relation(fields: [childId], references: [id], onDelete: Cascade)
+  user  User?  @relation("NotifUsers", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([childId])
+  @@index([userId])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  childId   String?
+  action    String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  child Child? @relation(fields: [childId], references: [id], onDelete: SetNull)
+
+  @@index([childId])
+  @@map("audit_logs")
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
