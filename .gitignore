@@ -33,4 +33,8 @@ yarn-error.log*
 
 # local tooling
 .helix-shots/
-*.local
+*.local.helix-overflow/
+
+
+# helix sandbox command output dumps
+.helix-overflow/
